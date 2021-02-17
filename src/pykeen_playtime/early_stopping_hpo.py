@@ -7,7 +7,7 @@ from pykeen_playtime.countries import Countries
 from pykeen_playtime.utils import GridType, Runner, fix_logging
 
 GRID: GridType = dict(
-    dataset=[Countries],
+    dataset=[Countries.get_normalized_name()],
     model=['transe', 'complex', 'rotate'],
     frequency=[1, 2, 5, 10],
     patience=[3, 5, 7],
@@ -20,9 +20,6 @@ class ESRunner(Runner):
 
     name = 'early_stopper_hpo'
     result_labels = ['epochs', 'amr', 'hits@10']
-    formatters = {
-        'dataset': lambda d: d if isinstance(d, str) else d.get_normalized_name(),
-    }
 
     def run(self, config, trial):
         """Run the early stopper HPO experiment."""
@@ -38,7 +35,10 @@ class ESRunner(Runner):
                 patience=config['patience'],
                 relative_delta=config['relative_delta'],
             ),
-            training_kwargs=dict(num_epochs=1000, tqdm_kwargs=dict(leave=False)),
+            training_kwargs=dict(
+                num_epochs=1000,
+                tqdm_kwargs=dict(leave=False),
+            ),
             evaluation_kwargs=dict(use_tqdm=False),
             automatic_memory_optimization=False,  # not necessary on CPU
         )

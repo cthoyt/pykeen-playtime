@@ -2,6 +2,7 @@
 
 """The countries dataset."""
 
+import pykeen.datasets
 from pykeen.datasets.base import UnpackedRemoteDataset
 
 BASE_URL = 'https://raw.githubusercontent.com/ZhenfengLei/KGDatasets/master/Countries/Countries_S1/'
@@ -31,6 +32,8 @@ class Countries(UnpackedRemoteDataset):
             **kwargs,
         )
 
+
+pykeen.datasets.datasets['countries'] = Countries
 
 if __name__ == '__main__':
     Countries().summarize()
