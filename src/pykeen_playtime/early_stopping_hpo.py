@@ -1,77 +1,57 @@
 # -*- coding: utf-8 -*-
 
-"""Countries dataset."""
+"""Early Stopping HPO Experiment."""
 
-from pykeen.datasets.base import UnpackedRemoteDataset
+from typing import Any, Mapping, Sequence
 
-__all__ = [
-    'Countries',
-]
+import pandas as pd
+from tabulate import tabulate
 
-BASE_URL = 'https://raw.githubusercontent.com/ZhenfengLei/KGDatasets/master/Countries/Countries_S1/'
+from pykeen.constants import PYKEEN_EXPERIMENTS
+from pykeen.pipeline import pipeline
+from pykeen_playtime.countries import Countries
+from pykeen_playtime.utils import iter_configs_trials
 
+DIRECTORY = PYKEEN_EXPERIMENTS / 'early_stopping_hpo'
+DIRECTORY.mkdir(exist_ok=True, parents=True)
 
-class Countries(UnpackedRemoteDataset):
-    """The Countries dataset."""
+TSV_PATH = DIRECTORY / 'stopping_hpo.tsv'
 
-    def __init__(self, create_inverse_triples: bool = False, **kwargs):
-        """Initialize the Countries small dataset.
-
-        :param create_inverse_triples: Should inverse triples be created? Defaults to false.
-        :param kwargs: keyword arguments passed to :class:`pykeen.datasets.base.UnpackedRemoteDataset`.
-        """
-        # GitHub's raw.githubusercontent.com service rejects requests that are streamable. This is
-        # normally the default for all of PyKEEN's remote datasets, so just switch the default here.
-        kwargs.setdefault('stream', False)
-        super().__init__(
-            training_url=f'{BASE_URL}/train.txt',
-            testing_url=f'{BASE_URL}/test.txt',
-            validation_url=f'{BASE_URL}/valid.txt',
-            create_inverse_triples=create_inverse_triples,
-            **kwargs,
-        )
+GRID: Mapping[str, Sequence[Any]] = dict(
+    dataset=[Countries],
+    model=['TransE', 'ComplEx', 'RotatE'],
+    frequency=[1, 2, 5, 10],
+    patience=[3, 5, 7],
+    relative_delta=[0.001, 0.002, 0.02],
+)
 
 
 def _main(trials: int = 5):
-    from pykeen.pipeline import pipeline
-    from tabulate import tabulate
-    from tqdm.contrib.itertools import product
-    import pandas as pd
-    from pykeen.constants import PYKEEN_EXPERIMENTS
-
-    datasets = [Countries]
-    models = ['TransE', 'ComplEx', 'RotatE']
-    frequencies = [1, 2, 5, 10]
-    patiences = [3, 5, 7]
-    deltas = [0.001, 0.002, 0.02]
-
     rows = []
-
-    it = product(datasets, models, range(trials), frequencies, patiences, deltas, desc='Early Stopper HPO')
-    for dataset, model, trial, frequency, patience, relative_delta in it:
+    for config, trial in iter_configs_trials(GRID, trials=trials, desc='Early Stopper HPO'):
         results = pipeline(
-            dataset=dataset,
-            model=model,
+            dataset=config['dataset'],
+            model=config['model'],
             random_seed=trial,
             device='cpu',
             stopper='early',
             stopper_kwargs=dict(
                 metric='adjusted_mean_rank',
-                frequency=frequency,
-                patience=patience,
-                relative_delta=relative_delta,
+                frequency=config['frequency'],
+                patience=config['patience'],
+                relative_delta=config['relative_delta'],
             ),
             training_kwargs=dict(num_epochs=1000),
             evaluation_kwargs=dict(use_tqdm=False),
             automatic_memory_optimization=False,  # not necessary on CPU
         )
         rows.append((
-            dataset if isinstance(dataset, str) else dataset.get_normalized_name(),
-            model,
+            config['dataset'] if isinstance(config['dataset'], str) else config['dataset'].get_normalized_name(),
+            config['model'],
             trial,
-            frequency,
-            patience,
-            relative_delta,
+            config['frequency'],
+            config['patience'],
+            config['relative_delta'],
             len(results.losses),
             results.metric_results.get_metric('both.avg.adjusted_mean_rank'),
             results.metric_results.get_metric('hits@10'),
@@ -80,7 +60,8 @@ def _main(trials: int = 5):
     df = pd.DataFrame(rows, columns=[
         'Dataset', 'Model', 'Trial', 'Frequency', 'Patience', 'Delta', 'Epochs', 'AMR', 'Hits@10',
     ])
-    df.to_csv(PYKEEN_EXPERIMENTS / 'stopping_hpo.tsv', sep='\t', index=False)
+    df.to_csv(TSV_PATH, sep='\t', index=False)
+
     print(tabulate(df, headers=df.columns))
 
 
