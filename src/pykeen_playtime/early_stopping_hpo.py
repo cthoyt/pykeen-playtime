@@ -2,33 +2,30 @@
 
 """Early Stopping HPO Experiment."""
 
-from typing import Any, Mapping, Sequence
-
-import pandas as pd
-from tabulate import tabulate
-
-from pykeen.constants import PYKEEN_EXPERIMENTS
 from pykeen.pipeline import pipeline
 from pykeen_playtime.countries import Countries
-from pykeen_playtime.utils import iter_configs_trials
+from pykeen_playtime.utils import GridType, Runner, fix_logging
 
-DIRECTORY = PYKEEN_EXPERIMENTS / 'early_stopping_hpo'
-DIRECTORY.mkdir(exist_ok=True, parents=True)
-
-TSV_PATH = DIRECTORY / 'stopping_hpo.tsv'
-
-GRID: Mapping[str, Sequence[Any]] = dict(
+GRID: GridType = dict(
     dataset=[Countries],
-    model=['TransE', 'ComplEx', 'RotatE'],
+    model=['transe', 'complex', 'rotate'],
     frequency=[1, 2, 5, 10],
     patience=[3, 5, 7],
     relative_delta=[0.001, 0.002, 0.02],
 )
 
 
-def _main(trials: int = 5):
-    rows = []
-    for config, trial in iter_configs_trials(GRID, trials=trials, desc='Early Stopper HPO'):
+class ESRunner(Runner):
+    """Runner for early stopping HPO experiments."""
+
+    name = 'early_stopper_hpo'
+    result_labels = ['epochs', 'amr', 'hits@10']
+    formatters = {
+        'dataset': lambda d: d if isinstance(d, str) else d.get_normalized_name(),
+    }
+
+    def run(self, config, trial):
+        """Run the early stopper HPO experiment."""
         results = pipeline(
             dataset=config['dataset'],
             model=config['model'],
@@ -41,29 +38,22 @@ def _main(trials: int = 5):
                 patience=config['patience'],
                 relative_delta=config['relative_delta'],
             ),
-            training_kwargs=dict(num_epochs=1000),
+            training_kwargs=dict(num_epochs=1000, tqdm_kwargs=dict(leave=False)),
             evaluation_kwargs=dict(use_tqdm=False),
             automatic_memory_optimization=False,  # not necessary on CPU
         )
-        rows.append((
-            config['dataset'] if isinstance(config['dataset'], str) else config['dataset'].get_normalized_name(),
-            config['model'],
-            trial,
-            config['frequency'],
-            config['patience'],
-            config['relative_delta'],
+        return (
             len(results.losses),
             results.metric_results.get_metric('both.avg.adjusted_mean_rank'),
             results.metric_results.get_metric('hits@10'),
-        ))
+        )
 
-    df = pd.DataFrame(rows, columns=[
-        'Dataset', 'Model', 'Trial', 'Frequency', 'Patience', 'Delta', 'Epochs', 'AMR', 'Hits@10',
-    ])
-    df.to_csv(TSV_PATH, sep='\t', index=False)
 
-    print(tabulate(df, headers=df.columns))
+def _main(trials: int = 10):
+    runner = ESRunner(GRID, trials=trials)
+    runner.print()
 
 
 if __name__ == '__main__':
+    fix_logging()
     _main()
