@@ -2,17 +2,15 @@
 
 """Early Stopping HPO Experiment."""
 
+from typing import Optional
+
 from pykeen.pipeline import pipeline
 from pykeen_playtime.countries import Countries
-from pykeen_playtime.utils import GridType, Runner, fix_logging
+from pykeen_playtime.utils import Runner, fix_logging
 
-GRID: GridType = dict(
-    dataset=[Countries.get_normalized_name()],
-    model=['transe', 'complex', 'rotate'],
-    frequency=[1, 2, 5, 10],
-    patience=[3, 5, 7],
-    relative_delta=[0.001, 0.002, 0.02],
-)
+__all__ = [
+    'ESRunner',
+]
 
 
 class ESRunner(Runner):
@@ -20,6 +18,13 @@ class ESRunner(Runner):
 
     name = 'early_stopper_hpo'
     result_labels = ['epochs', 'amr', 'hits@10']
+    grid = dict(
+        dataset=[Countries.get_normalized_name()],
+        model=['transe', 'complex', 'rotate'],
+        frequency=[1, 2, 5, 10],
+        patience=[3, 5, 7],
+        relative_delta=[0.001, 0.002, 0.02],
+    )
 
     def run(self, config, trial):
         """Run the early stopper HPO experiment."""
@@ -49,8 +54,8 @@ class ESRunner(Runner):
         )
 
 
-def _main(trials: int = 10):
-    runner = ESRunner(GRID, trials=trials)
+def _main(trials: Optional[int] = None):
+    runner = ESRunner(trials=trials)
     runner.print()
 
 

@@ -128,15 +128,14 @@ class Runner(ABC):
     name: ClassVar[str]
     #: The labels of the results returned by the run() function
     result_labels: ClassVar[Sequence[str]]
+    #: The grid to search
+    grid: ClassVar[GridType]
     #: A dictionary of reformatters for config values
     formatters: ClassVar[Mapping[str, Callable[[Any], str]]] = {}
-    #: The grid to search
-    grid: GridType
 
-    def __init__(self, grid: GridType, trials: Optional[int] = None):
+    def __init__(self, trials: Optional[int] = None):
         """Initialize the runner.
 
-        :param grid: The grid to check
         :param trials: The number of trials to run. Defaults to 10.
         :raises ValueError: if the ``result_labels`` variable is the wrong length
         """
@@ -144,9 +143,8 @@ class Runner(ABC):
         self.directory.mkdir(exist_ok=True, parents=True)
         self.path = self.directory / 'results.tsv'
 
-        self.grid = grid
         self.it = iter_configs_trials(
-            grid,
+            self.grid,
             trials=trials,
         )
 
